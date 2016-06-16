@@ -1,6 +1,6 @@
 {
   "name": "hass-customizer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Rebuild Home Assistant customize.yaml to automatically hide entities from HAASKA",
   "main": "index.js",
   "bin": {
