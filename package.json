@@ -1,0 +1,33 @@
+{
+  "name": "hass-customizer",
+  "version": "1.0.0",
+  "description": "Rebuild Home Assistant customize.yaml to automatically hide entities from HAASKA",
+  "main": "index.js",
+  "bin": {
+    "hass-customizer": "./bin/hass-customizer"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dale3h/hass-customizer.git"
+  },
+  "keywords": [
+    "home-assistant",
+    "hass",
+    "haaska",
+    "yaml"
+  ],
+  "author": "Dale Higgs <dale3h@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dale3h/hass-customizer/issues"
+  },
+  "homepage": "https://github.com/dale3h/hass-customizer",
+  "dependencies": {
+    "deep-extend": "^0.4.1",
+    "js-yaml": "^3.6.1",
+    "request": "^2.72.0"
+  }
+}
