@@ -1,11 +1,12 @@
 {
-  "apiUrl": "http://localhost:8123/api",
-  "apiPassword": "YOUR_API_PASSWORD",
-  "defaultHidden": true,
-  "keyDateAdded": "date_added",
-  "keyDateUpdated": "date_updated",
-  "customizeFile": "~/.homeassistant/customize.yaml",
-  "customizeFileOutput": "~/.homeassistant/customize.yaml",
-  "customizeFileBackup": "~/.homeassistant/customize.yaml.backup",
-  "debug": false
+  "debug": false,
+  "api_url": "http://localhost:8123/api",
+  "api_password": "YOUR_API_PASSWORD",
+  "default_hidden": true,
+  "key_date_added": "date_added",
+  "key_date_updated": "date_updated",
+  "customize_file": "~/.homeassistant/customize.yaml",
+  "customize_file_output": "~/.homeassistant/customize.yaml",
+  "customize_file_backup": "~/.homeassistant/customize.yaml.backup",
+  "supported_types": ["automation", "cover", "group", "input_boolean", "input_slider", "light", "media_player", "scene", "script", "switch"]
 }
