@@ -4,12 +4,14 @@ process.chdir(__dirname);
 
 var fs            = require('fs');
 var assert        = require('assert');
+var debug         = require('debug')('customizer');
 var deepExtend    = require('deep-extend');
 var yaml          = require('js-yaml');
 var HomeAssistant = require('./lib/home-assistant');
 var config        = require('./config.json');
 
 var defaults = {
+  debug: false,
   api_url: 'http://localhost:8123/api',
   api_password: null,
   default_hidden: true,
@@ -17,7 +19,6 @@ var defaults = {
   key_date_updated: 'date_updated',
   customize_file: '~/.homeassistant/customize.yaml',
   customize_file_output: null,
-  debug: false,
   supported_types: ['automation', 'cover', 'group', 'input_boolean', 'input_slider', 'light', 'media_player', 'scene', 'script', 'switch']
 };
 
@@ -109,12 +110,32 @@ function currentTime() {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
+// Create a backup file
 if (!config.debug && config.customize_file_backup) {
+  debug('Writing backup file to %s', config.customize_file_backup);
   fs.writeFileSync(config.customize_file_backup, fs.readFileSync(config.customize_file));
 }
 
 var haaska    = {};
 var customize = yaml.safeLoad(fs.readFileSync(config.customize_file, 'utf8'));
+
+debug('Loaded existing customize data from %s', config.customize_file);
+
+// Convert to an object for easier processing
+if (Array.isArray(customize)) {
+  var customizeTemp = {};
+
+  customize.forEach(function(element) {
+    var entity_id = element.entity_id;
+    delete element.entity_id;
+
+    customizeTemp[entity_id] = element;
+  });
+
+  customize = customizeTemp;
+} else {
+  debug('Old customize format detected. New format will be used for future output.');
+}
 
 hass.get('states', function(err, res, body) {
   if (err) {
@@ -137,8 +158,10 @@ hass.get('states', function(err, res, body) {
     }
   }
 
+  // Merge the new and existing data
   deepExtend(haaska, customize);
 
+  // Add date keys if configured
   if (config.key_date_added || config.key_date_updated) {
     for (var entityId in haaska) {
       var entityNew = haaska[entityId];
@@ -158,12 +181,19 @@ hass.get('states', function(err, res, body) {
     }
   }
 
+  // Get YAML dump of the object
   var dump = yaml.safeDump(haaska, {
     sortKeys: true
   });
 
+  // Unquote mdi: icons
   dump = dump.replace(/icon: 'mdi:[^']+'/g, function(match) {
     return match.replace(/'/g, '');
+  });
+
+  // Convert to new customize format
+  dump = dump.replace(/^'?([a-z0-9_][a-z0-9_.*, ]+)'?:$/gm, function(match, entity_id) {
+    return '- entity_id: ' + entity_id;
   });
 
   var lines = dump.split('\n');
@@ -171,22 +201,27 @@ hass.get('states', function(err, res, body) {
   var output = [];
   var domain = '';
 
-  var entityRegex = /^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\:$/;
+  var entityRegex = /^- entity_id: ([a-z0-9_]+)/;
   var quoteRegex  = /^(\s*[A-Za-z0-9_]+:\s*)([^\s]+'.+)$/;
 
+  // Add the file header
   output.push('################################################################');
   output.push('## Customize');
   output.push('################################################################');
 
+  // Loop through and process each line
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
+    // Quote lines that have a single-quote in them (i.e. "Dale's Room")
     line = line.replace(quoteRegex, function(match, key, value) {
       return key + '"' + value + '"';
     });
 
+    // Check against the entity_id regex
     var matches = entityRegex.exec(line);
 
+    // Add domain header if it's a new domain
     if (matches) {
       if (matches[1] != domain) {
         domain = matches[1];
@@ -197,23 +232,27 @@ hass.get('states', function(err, res, body) {
         output.push('################################################');
       }
 
+      // Add a blank line below the domain header
       output.push('');
     }
 
+    // Add the current line to the output
     output.push(line);
   }
 
+  // Add a footer containing the current timestamp
   output.push('################################################################');
   output.push('# Last Generated: ' + new Date());
   output.push('################################################################');
   output.push('');
 
+  // Convert the array to a string
   output = output.join('\n');
 
   if (config.debug) {
-    console.log(output);
+    debug('%o', output);
   } else {
     fs.writeFileSync(config.customize_file_output, output, 'utf8');
-    console.log('%s has been updated', config.customize_file_output);
+    debug('%s has been updated', config.customize_file_output);
   }
 });
