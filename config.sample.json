@@ -8,5 +8,6 @@
   "customize_file": "~/.homeassistant/customize.yaml",
   "customize_file_output": "~/.homeassistant/customize.yaml",
   "customize_file_backup": "~/.homeassistant/customize.yaml.backup",
-  "supported_types": ["automation", "cover", "group", "input_boolean", "input_slider", "light", "media_player", "scene", "script", "switch"]
+  "haaska_domains": ["automation", "cover", "group", "input_boolean", "input_slider", "light", "lock", "media_player", "remote", "scene", "script", "switch"],
+  "homebridge_domains": ["binary_sensor", "cover", "device_tracker", "input_boolean", "light", "lock", "sensor", "switch"]
 }

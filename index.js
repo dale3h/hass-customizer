@@ -19,7 +19,16 @@ var defaults = {
   key_date_updated: 'date_updated',
   customize_file: '~/.homeassistant/customize.yaml',
   customize_file_output: null,
-  supported_types: ['automation', 'cover', 'group', 'input_boolean', 'input_slider', 'light', 'media_player', 'scene', 'script', 'switch']
+  haaska_domains: [
+    'automation', 'cover', 'group', 'input_boolean',
+    'input_slider', 'light', 'lock', 'media_player',
+    'remote', 'scene', 'script', 'switch'
+  ],
+  homebridge_domains: [
+    'binary_sensor', 'cover', 'device_tracker',
+    'input_boolean', 'light', 'lock', 'sensor',
+    'switch'
+  ]
 };
 
 var config = deepExtend({}, defaults, config);
@@ -63,14 +72,46 @@ function entityName(x) {
 }
 
 function supportsHaaska(x) {
-  return -1 !== config.supported_types.indexOf(entityDomain(x));
+  return -1 !== config.haaska_domains.indexOf(entityDomain(x));
+}
+
+function supportsHomebridge(x) {
+  return -1 !== config.homebridge_domains.indexOf(entityDomain(x));
 }
 
 function isHidden(x) {
-  var hidden = x.attributes.haaska_hidden;
+  var hidden = x.attributes.hidden;
 
   if ('undefined' === typeof hidden) {
     hidden = config.default_hidden;
+  } else if (!hidden || 'no' === hidden || 'false' === hidden || '0' === hidden) {
+    hidden = false;
+  } else {
+    hidden = true;
+  }
+
+  return hidden;
+}
+
+function isHiddenHaaska(x) {
+  var hidden = x.attributes.haaska_hidden;
+
+  if ('undefined' === typeof hidden) {
+    hidden = isHidden(x);
+  } else if (!hidden || 'no' === hidden || 'false' === hidden || '0' === hidden) {
+    hidden = false;
+  } else {
+    hidden = true;
+  }
+
+  return hidden;
+}
+
+function isHiddenHomebridge(x) {
+  var hidden = x.attributes.homebridge_hidden;
+
+  if ('undefined' === typeof hidden) {
+    hidden = isHiddenHaaska(x);
   } else if (!hidden || 'no' === hidden || 'false' === hidden || '0' === hidden) {
     hidden = false;
   } else {
@@ -116,13 +157,15 @@ if (!config.debug && config.customize_file_backup) {
   fs.writeFileSync(config.customize_file_backup, fs.readFileSync(config.customize_file));
 }
 
-var haaska    = {};
+var entities  = {};
 var customize = yaml.safeLoad(fs.readFileSync(config.customize_file, 'utf8'));
 
 debug('Loaded existing customize data from %s', config.customize_file);
 
 // Convert to an object for easier processing
 if (Array.isArray(customize)) {
+  debug('Incompatible format detected. Correct format will be used for future output.');
+
   var customizeTemp = {};
 
   customize.forEach(function(element) {
@@ -133,8 +176,6 @@ if (Array.isArray(customize)) {
   });
 
   customize = customizeTemp;
-} else {
-  debug('Old customize format detected. New format will be used for future output.');
 }
 
 hass.get('states', function(err, res, body) {
@@ -145,26 +186,30 @@ hass.get('states', function(err, res, body) {
   for (var i = 0; i < body.length; i++ ) {
     var x = body[i];
 
-    haaska[x.entity_id] = {};
+    entities[x.entity_id] = {};
 
     if (supportsHaaska(x)) {
-      haaska[x.entity_id]['haaska_hidden'] = isHidden(x);
+      entities[x.entity_id]['haaska_hidden'] = isHiddenHaaska(x);
+    }
+
+    if (supportsHomebridge(x)) {
+      entities[x.entity_id]['homebridge_hidden'] = isHiddenHomebridge(x);
     }
 
     var friendlyName = getFriendlyName(x);
 
     if (friendlyName) {
-      haaska[x.entity_id]['friendly_name'] = friendlyName;
+      entities[x.entity_id]['friendly_name'] = friendlyName;
     }
   }
 
   // Merge the new and existing data
-  deepExtend(haaska, customize);
+  deepExtend(entities, customize);
 
   // Add date keys if configured
   if (config.key_date_added || config.key_date_updated) {
-    for (var entityId in haaska) {
-      var entityNew = haaska[entityId];
+    for (var entityId in entities) {
+      var entityNew = entities[entityId];
       var entityOld = customize[entityId];
 
       if (config.key_date_added && 'undefined' === typeof entityOld) {
@@ -182,7 +227,7 @@ hass.get('states', function(err, res, body) {
   }
 
   // Get YAML dump of the object
-  var dump = yaml.safeDump(haaska, {
+  var dump = yaml.safeDump(entities, {
     sortKeys: true
   });
 
@@ -191,18 +236,12 @@ hass.get('states', function(err, res, body) {
     return match.replace(/'/g, '');
   });
 
-  // Convert to new customize format
-  dump = dump.replace(/^'?([a-z0-9_][a-z0-9_.*, ]+)'?:$/gm, function(match, entity_id) {
-    return '- entity_id: ' + entity_id;
-  });
-
   var lines = dump.split('\n');
 
   var output = [];
   var domain = '';
 
-  var entityRegex = /^- entity_id: ([a-z0-9_]+)/;
-  var quoteRegex  = /^(\s*[A-Za-z0-9_]+:\s*)([^\s]+'.+)$/;
+  var entityRegex = /^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\:$/;
 
   // Add the file header
   output.push('################################################################');
@@ -212,11 +251,6 @@ hass.get('states', function(err, res, body) {
   // Loop through and process each line
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
-
-    // Quote lines that have a single-quote in them (i.e. "Dale's Room")
-    line = line.replace(quoteRegex, function(match, key, value) {
-      return key + '"' + value + '"';
-    });
 
     // Check against the entity_id regex
     var matches = entityRegex.exec(line);
@@ -250,7 +284,7 @@ hass.get('states', function(err, res, body) {
   output = output.join('\n');
 
   if (config.debug) {
-    debug('%o', output);
+    debug('%s', output);
   } else {
     fs.writeFileSync(config.customize_file_output, output, 'utf8');
     debug('%s has been updated', config.customize_file_output);
